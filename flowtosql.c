@@ -46,12 +46,11 @@ struct Traffic {
 FILE *unrel_file;
 
 // Match if is ip in subnet
-gint ip_in_subnet(gchar *ip, gchar *subnet, guint netmask)
+gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
 {
 
-	struct in_addr s_ip, s_subnet, s_netmask;
+	struct in_addr s_subnet, s_netmask;
 	guint octets;
-	inet_pton(AF_INET, ip, &s_ip);
 	inet_pton(AF_INET, subnet, &s_subnet);
 	if ( netmask < 0 || netmask > 32 )
 	{
@@ -69,7 +68,7 @@ gint ip_in_subnet(gchar *ip, gchar *subnet, guint netmask)
 }
 
 // Our nets is here
-gint is_client_ip(gchar *ip)
+gint is_client_ip(struct in_addr ip)
 {
 
 	return ( ip_in_subnet(ip, "93.95.156.0", 24) ||
@@ -293,7 +292,8 @@ int main()
 	gchar *inbuff;
 	time_t unix_time;
 	guint octets;
-	gchar srcaddr[INET_ADDRSTRLEN], dstaddr[INET_ADDRSTRLEN], *userip;
+	struct in_addr srcaddr, dstaddr;
+	gchar srcaddr_str[INET_ADDRSTRLEN], dstaddr_str[INET_ADDRSTRLEN], *userip_str;
 	// for output
 	struct FFormat outdata;
 	// HashTables
@@ -340,10 +340,10 @@ int main()
 		octets = strtoul(inbuff, NULL, 10);
 		// srcip
 		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
-		strncpy(srcaddr, inbuff, INET_ADDRSTRLEN);
+		strncpy(srcaddr_str, inbuff, INET_ADDRSTRLEN);
 		// dstip
 		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
-		strncpy(dstaddr, inbuff, INET_ADDRSTRLEN);
+		strncpy(dstaddr_str, inbuff, INET_ADDRSTRLEN);
 		// srcport
 		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
 		outdata.srcport = strtoul(inbuff, NULL, 10);
@@ -355,29 +355,32 @@ int main()
 		outdata.proto = strtoul(inbuff, NULL, 10);
 
 		// Unneeded traffic
-		if (	0 == strcmp(srcaddr, "93.95.156.250") ||
-				0 == strcmp(dstaddr, "93.95.156.250") ||
-				0 == strcmp(srcaddr, "93.171.239.250") ||
-				0 == strcmp(dstaddr, "93.171.239.250") )
+		if (	0 == strcmp(srcaddr_str, "93.95.156.250") ||
+				0 == strcmp(dstaddr_str, "93.95.156.250") ||
+				0 == strcmp(srcaddr_str, "93.171.239.250") ||
+				0 == strcmp(dstaddr_str, "93.171.239.250") )
 		{
 			not_used++;
 			continue;
 		}
 
+		inet_pton(AF_INET, srcaddr_str, &srcaddr);
+		inet_pton(AF_INET, dstaddr_str, &dstaddr);
+
 		// Check if srcaddr or dstaddr is client ip
 		if ( is_client_ip(srcaddr) )
 		{
-			userip = srcaddr;
-			inet_pton(AF_INET, srcaddr, &(outdata.userip));
-			inet_pton(AF_INET, dstaddr, &(outdata.host));
+			userip_str = srcaddr_str;
+			outdata.userip = srcaddr;
+			outdata.host = dstaddr;
 			outdata.octetsin = 0;
 			outdata.octetsout = octets;
 		}
 		else if ( is_client_ip(dstaddr) )
 		{
-			userip = dstaddr;
-			inet_pton(AF_INET, dstaddr, &(outdata.userip));
-			inet_pton(AF_INET, srcaddr, &(outdata.host));
+			userip_str = dstaddr_str;
+			outdata.userip = dstaddr;
+			outdata.host = srcaddr;
 			outdata.octetsin = octets;
 			outdata.octetsout = 0;
 		}
@@ -388,7 +391,7 @@ int main()
 		}
 
 		// If user with that ip is found
-		if ( NULL != (online = g_hash_table_lookup(online_ht, userip)) )
+		if ( NULL != (online = g_hash_table_lookup(online_ht, userip_str)) )
 		{
 			// Increment traffic
 			traffic = g_hash_table_lookup(traffic_ht, &(online->uid));
