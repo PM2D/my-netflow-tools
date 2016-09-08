@@ -20,6 +20,7 @@
 #define ONLINEQUERY "SELECT radacct.username, usergroup.id, radacct.framedipaddress \
 FROM radacct LEFT JOIN usergroup ON radacct.username = usergroup.username \
 WHERE radacct.acctstoptime IS NULL"
+#define LINES 39999
 
 // PostgreSQL variables
 PGconn *conn;
@@ -300,10 +301,10 @@ int main()
 	online_ht = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_online);
 	traffic_ht = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 	// counters
-	guint	not_used = 0,
-			unrelated = 0,
-			lines = 0,
-			total = 0;
+	guint	notused_cnt = 0,
+			unrelated_cnt = 0,
+			lines_cnt = 0,
+			total_cnt = 0;
 	// misc
 	gchar *filename;
 	struct Online *online;
@@ -360,7 +361,7 @@ int main()
 				0 == strcmp(srcaddr_str, "93.171.239.250") ||
 				0 == strcmp(dstaddr_str, "93.171.239.250") )
 		{
-			not_used++;
+			notused_cnt++;
 			continue;
 		}
 
@@ -386,7 +387,7 @@ int main()
 		}
 		else
 		{
-			not_used++;
+			notused_cnt++;
 			continue;
 		}
 
@@ -404,20 +405,23 @@ int main()
 		else
 		{
 			fwrite(&outdata, sizeof(struct FFormat), 1, unrel_file);
-			unrelated++;
+			unrelated_cnt++;
+			// if unrelated line is meet, then we better update a data faster
+			// but not immediately because there can be different kinds of unrelated flows
+			lines_cnt += (LINES / 100);
 		}
 
-		lines++;
-		total++;
+		lines_cnt++;
+		total_cnt++;
 
-		if ( 39999 < lines )
+		if ( LINES < lines_cnt )
 		{
 
-			lines = 0;
+			lines_cnt = 0;
 			unix_time = time(NULL) + TZOFFSET;
 			memcpy(tm_date, gmtime(&unix_time), sizeof(struct tm));
 
-			printf("%d hours, 40000 lines, DB work:\n", tm_date->tm_hour);
+			printf("%d hours, DB data sync:\n", tm_date->tm_hour);
 
 			// If next day
 			if ( tm_date->tm_yday != tm_now->tm_yday )
@@ -448,8 +452,8 @@ int main()
 				// Renew date_now just in case
 				strftime(date_now, 11, "%F", tm_date);
 				// TODO: Message to SYSLOG must be here
-				syslog(LOG_INFO, "flowtosql: обработано %u NetFlow строк, несвязанных %u, неиспользованных %u", total, unrelated, not_used);
-				not_used = unrelated = total = 0;
+				syslog(LOG_INFO, "flowtosql: обработано %u NetFlow строк, несвязанных %u, неиспользованных %u", total_cnt, unrelated_cnt, notused_cnt);
+				notused_cnt = unrelated_cnt = total_cnt = 0;
 				*tm_now = *tm_date;
 			}
 
