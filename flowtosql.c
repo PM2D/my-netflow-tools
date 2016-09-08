@@ -481,7 +481,7 @@ int main()
 			}
 
 			// If next hour
-			if ( 1 || tm_date->tm_hour != tm_now->tm_hour )
+			if ( tm_date->tm_hour != tm_now->tm_hour )
 			{
 				g_printf("   Next hour (%d -> %d). Flushing data...\n", tm_now->tm_hour, tm_date->tm_hour);
 				// Insert traffic data
