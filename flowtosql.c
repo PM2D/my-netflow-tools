@@ -9,18 +9,8 @@
 #include <libpq-fe.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <iniparser.h>
 #include "file_format.h"
-
-//TODO: Use config-files maybe
-#define FLOWSDIR "/backups/flows/users/" // Directory for flows output
-#define UNRELFLOWS "/backups/flows/unrelated_flows.bin" // Unrelated flows temp filename
-#define UNRELFDIR "/backups/flows/unrelated" // Unrelated flows directory
-#define PGCONNSTR "user=radius dbname=radius" // PostgreSQL connection string
-#define TZOFFSET 25200 // GMT+7
-#define ONLINEQUERY "SELECT radacct.username, usergroup.id, radacct.framedipaddress \
-FROM radacct LEFT JOIN usergroup ON radacct.username = usergroup.username \
-WHERE radacct.acctstoptime IS NULL"
-#define LINES 39999
 
 // PostgreSQL variables
 PGconn *conn;
@@ -46,6 +36,60 @@ struct Traffic {
 // Unrelated flows file
 FILE *unrel_file;
 
+// Config vars
+dictionary *iniconf;
+const gchar *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
+gint cfg_tzoffset, cfg_lines;
+
+// Read config
+void read_config(const gchar * filename)
+{
+
+	iniconf = iniparser_load(filename);
+	if ( NULL == iniconf )
+	{
+		fprintf(stderr, "Cannot load config file %s\n", filename);
+		exit(1);
+	}
+	// UTC + Offset
+	cfg_tzoffset = iniparser_getint(iniconf, "Global:TimezoneOffset", 7);
+	cfg_tzoffset = cfg_tzoffset * 60 * 60;
+	// How much lines to wait
+	cfg_lines = iniparser_getint(iniconf, "Global:Lines", 40000);
+	cfg_lines--;
+	// Dirnames/Filenames
+	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
+	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
+	{
+		fprintf(stderr, "ERROR: No such directory: %s\n", cfg_flowsdir);
+		exit(1);
+	}
+	cfg_unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
+	cfg_unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
+	if ( !g_file_test(cfg_unrelfdir, G_FILE_TEST_IS_DIR) )
+	{
+		fprintf(stderr, "ERROR: No such directory: %s\n", cfg_unrelfdir);
+		exit(1);
+	}
+	// PostgreSQL
+	if ( NULL == (cfg_pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
+	{
+		fputs("ERROR: PostgreSQL connection string is empty.\n", stderr);
+		exit(1);
+	}
+	if ( NULL == (cfg_onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
+	{
+		fputs("ERROR: PostgreSQL online query string is empty.\n", stderr);
+		exit(1);
+	}
+	if ( NULL == (cfg_insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
+	{
+		fputs("ERROR: PostgreSQL insert query string is empty.\n", stderr);
+		exit(1);
+	}
+
+}
+
 // Match if is ip in subnet
 gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
 {
@@ -59,7 +103,7 @@ gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
 	}
 	octets = (netmask + 7) / 8;
 	s_netmask.s_addr = 0;
-	if (octets > 0)
+	if ( octets > 0 )
 	{
 		memset(&s_netmask.s_addr, 255, (gsize)octets - 1);
 		memset((guchar *)&s_netmask.s_addr + (octets - 1), (256 - (1 << (32 - netmask) % 8)), 1);
@@ -99,6 +143,7 @@ void pg_exit()
 	g_hash_table_remove_all(online_ht);
 	g_hash_table_destroy(online_ht);
 	g_hash_table_destroy(traffic_ht);
+	iniparser_freedict(iniconf);
 	closelog();
 	exit(1);
 
@@ -114,15 +159,7 @@ void traffic_insert(gpointer key, gpointer value, struct tm *date )
 	strftime(date_now, 20, "%F", date);
 	hours = (0 < date->tm_hour) ? (date->tm_hour - 1) : 23;
 
-	g_sprintf(query, "INSERT INTO dayflowtemp (username, \"day\", hours, \"in\", \"out\") VALUES (%d, '%s', %d, %llu, %llu)", *(gint*)key, date_now, hours, ((struct Traffic*)value)->octetsin, ((struct Traffic*)value)->octetsout);
-	res = PQexec(conn, query);
-	if ( PQresultStatus(res) != PGRES_COMMAND_OK )
-	{
-		pg_exit();
-	}
-	PQclear(res);
-
-	g_sprintf(query, "INSERT INTO flow (username, \"day\", hours, \"in\", \"out\") VALUES (%d, '%s', %d, %llu, %llu)", *(gint*)key, date_now, hours, ((struct Traffic*)value)->octetsin, ((struct Traffic*)value)->octetsout);
+	g_sprintf(query, "%s VALUES (%d, '%s', %d, %llu, %llu)", cfg_insertquery, *(gint*)key, date_now, hours, ((struct Traffic*)value)->octetsin, ((struct Traffic*)value)->octetsout);
 	res = PQexec(conn, query);
 	if ( PQresultStatus(res) != PGRES_COMMAND_OK )
 	{
@@ -136,14 +173,14 @@ void traffic_insert(gpointer key, gpointer value, struct tm *date )
 void sigintHandler(int sig_num)
 {
 
-	g_printf("\n Termination attempt using Ctrl+C \n Freeing resources \n");
-	fflush(stdout);
+	fputs("\n Termination attempt using Ctrl+C \n Freeing resources \n", stderr);
 	PQfinish(conn);
 	fclose(unrel_file);
 	g_hash_table_remove_all(traffic_ht);
 	g_hash_table_remove_all(online_ht);
 	g_hash_table_destroy(online_ht);
 	g_hash_table_destroy(traffic_ht);
+	iniparser_freedict(iniconf);
 	closelog();
 	exit(1);
 
@@ -178,11 +215,11 @@ void update_hash_tables_from_db()
 	time_t date_time;
 
 	// current date
-	date_time = time(NULL) + TZOFFSET;
+	date_time = time(NULL) + cfg_tzoffset;
 	date_tm = gmtime(&date_time);
 	strftime(date_str, 11, "%F", date_tm);
 
-	res = PQexec(conn, ONLINEQUERY);
+	res = PQexec(conn, cfg_onlinequery);
 	if ( PQresultStatus(res) != PGRES_TUPLES_OK )
 	{
 		pg_exit();
@@ -209,7 +246,7 @@ void update_hash_tables_from_db()
 				g_printf("   IP address %s now belongs to user %s\n", framedipaddr, online->username);
 				syslog(LOG_NOTICE, "flowtosql: ip %s отношение изменено к %s", framedipaddr, online->username);
 				// Constructing directory name
-				g_sprintf(dirname, "%s%s", FLOWSDIR, online->username);
+				g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
 				// If directory does not exists, create it
 				if ( !g_file_test(dirname, G_FILE_TEST_IS_DIR) )
 				{
@@ -244,7 +281,7 @@ void update_hash_tables_from_db()
 
 			printf("   New user connected: %s %s\n", framedipaddr, online->username);
 			// Constructing directory name
-			g_sprintf(dirname, "%s%s", FLOWSDIR, online->username);
+			g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
 			// If directory does not exists, create it
 			if ( !g_file_test(dirname, G_FILE_TEST_IS_DIR) )
 			{
@@ -312,13 +349,16 @@ int main()
 	gchar date_now[11];
 	struct tm *tm_now, *tm_date;
 
+	// read config
+	read_config("flowtosql.conf");
+
 	// current date
-	unix_time = time(NULL) + TZOFFSET;
+	unix_time = time(NULL) + cfg_tzoffset;
 	tm_date = g_memdup(gmtime(&unix_time), sizeof(struct tm));
 	tm_now = g_memdup(gmtime(&unix_time), sizeof(struct tm));
 
 	// Connect to PostgreSQL
-	if ( PQstatus(conn = PQconnectdb(PGCONNSTR)) == CONNECTION_BAD )
+	if ( PQstatus(conn = PQconnectdb(cfg_pgconnstr)) == CONNECTION_BAD )
 	{
 		pg_exit();
 	}
@@ -327,7 +367,7 @@ int main()
 	update_hash_tables_from_db();
 
 	// Open temp file for unrelated flows
-	unrel_file = fopen(UNRELFLOWS, "ab");
+	unrel_file = fopen(cfg_unrelflows, "ab");
 
 	// Skip first line
 	fgets(line, 256, stdin);
@@ -408,17 +448,17 @@ int main()
 			unrelated_cnt++;
 			// if unrelated line is meet, then we better update a data faster
 			// but not immediately because there can be different kinds of unrelated flows
-			lines_cnt += (LINES / 100);
+			lines_cnt += (cfg_lines / 100);
 		}
 
 		lines_cnt++;
 		total_cnt++;
 
-		if ( LINES < lines_cnt )
+		if ( lines_cnt > cfg_lines )
 		{
 
 			lines_cnt = 0;
-			unix_time = time(NULL) + TZOFFSET;
+			unix_time = time(NULL) + cfg_tzoffset;
 			memcpy(tm_date, gmtime(&unix_time), sizeof(struct tm));
 
 			printf("%d hours, DB data sync:\n", tm_date->tm_hour);
@@ -431,10 +471,10 @@ int main()
 				filename = g_malloc(256 * sizeof(gchar));
 				// Constructing full path to new filename
 				strftime(date_now, 11, "%F", tm_now);
-				g_sprintf(filename, "%s/%s.bin", UNRELFDIR, date_now);
+				g_sprintf(filename, "%s/%s.bin", cfg_unrelfdir, date_now);
 				fclose(unrel_file);
-				rename(UNRELFLOWS, filename);
-				unrel_file = fopen(UNRELFLOWS, "ab");
+				rename(cfg_unrelflows, filename);
+				unrel_file = fopen(cfg_unrelflows, "ab");
 				g_free(filename);
 
 			}
@@ -475,6 +515,7 @@ int main()
 	g_free(tm_date);
 
 	fclose(unrel_file);
+	iniparser_freedict(iniconf);
 	closelog();
 
 	return 0;
