@@ -115,7 +115,7 @@ gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
 // Our nets is here
 gint is_client_ip(struct in_addr ip)
 {
-
+	// TODO: Somehow get subnets from config
 	return ( ip_in_subnet(ip, "93.95.156.0", 24) ||
 			 ip_in_subnet(ip, "31.13.178.0", 24) ||
 			 ip_in_subnet(ip, "93.171.236.0", 22) );
@@ -244,7 +244,7 @@ void update_hash_tables_from_db()
 			if ( 0 != strcmp(online_cmp->username, online->username) )
 			{
 				g_printf("   IP address %s now belongs to user %s\n", framedipaddr, online->username);
-				syslog(LOG_NOTICE, "flowtosql: ip %s отношение изменено к %s", framedipaddr, online->username);
+				syslog(LOG_NOTICE, "flowtosql: IP %s relation changed to user %s", framedipaddr, online->username);
 				// Constructing directory name
 				g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
 				// If directory does not exists, create it
@@ -396,6 +396,7 @@ int main()
 		outdata.proto = strtoul(inbuff, NULL, 10);
 
 		// Unneeded traffic
+		// TODO: Somehow get from config
 		if (	0 == strcmp(srcaddr_str, "93.95.156.250") ||
 				0 == strcmp(dstaddr_str, "93.95.156.250") ||
 				0 == strcmp(srcaddr_str, "93.171.239.250") ||
@@ -480,7 +481,7 @@ int main()
 			}
 
 			// If next hour
-			if ( tm_date->tm_hour != tm_now->tm_hour )
+			if ( 1 || tm_date->tm_hour != tm_now->tm_hour )
 			{
 				g_printf("   Next hour (%d -> %d). Flushing data...\n", tm_now->tm_hour, tm_date->tm_hour);
 				// Insert traffic data
@@ -491,8 +492,7 @@ int main()
 				g_hash_table_remove_all(online_ht);
 				// Renew date_now just in case
 				strftime(date_now, 11, "%F", tm_date);
-				// TODO: Message to SYSLOG must be here
-				syslog(LOG_INFO, "flowtosql: обработано %u NetFlow строк, несвязанных %u, неиспользованных %u", total_cnt, unrelated_cnt, notused_cnt);
+				syslog(LOG_INFO, "flowtosql: processed %u NetFlow lines, unrelated %u, not used %u", total_cnt, unrelated_cnt, notused_cnt);
 				notused_cnt = unrelated_cnt = total_cnt = 0;
 				*tm_now = *tm_date;
 			}
