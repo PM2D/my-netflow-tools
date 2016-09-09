@@ -38,8 +38,16 @@ FILE *unrel_file;
 
 // Config vars
 dictionary *iniconf;
-const gchar *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
+const gchar *cfg_networks, *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
 gint cfg_tzoffset, cfg_lines;
+
+// Our networks
+typedef struct Network {
+	struct in_addr addr;
+	guint netmask;
+} Network;
+Network *networks;
+guint networks_cnt = 1;
 
 // Read config
 void read_config(const gchar * filename)
@@ -57,6 +65,12 @@ void read_config(const gchar * filename)
 	// How much lines to wait
 	cfg_lines = iniparser_getint(iniconf, "Global:Lines", 40000);
 	cfg_lines--;
+	// Subnets
+	if ( NULL == (cfg_networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
+	{
+		fputs("ERROR: Networks is empty.\n", stderr);
+		exit(1);
+	}
 	// Dirnames/Filenames
 	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
 	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
@@ -90,13 +104,59 @@ void read_config(const gchar * filename)
 
 }
 
-// Match if is ip in subnet
-gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
+// Parse networks string
+void parse_networks()
 {
 
-	struct in_addr s_subnet, s_netmask;
+	gchar *tok, *in_str, ip[16];
+	guint i = 0, n = 0;
+	// must be allocated because is restricted
+	in_str = g_strdup(cfg_networks);
+	// count commas in string
+	for (; in_str[i]; i++)
+		networks_cnt += (in_str[i] == ',');
+	networks = malloc(networks_cnt * sizeof(*networks));
+	i = 0;
+
+	// parse string
+	tok = strtok(in_str, "/");
+	while ( NULL != tok )
+	{
+		// rude exit on any error
+		if ( 0 == inet_pton(AF_INET, tok, &(networks[i].addr)) )
+		{
+			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			exit(1);
+		}
+		if ( NULL == (tok = strtok(NULL, ",")) )
+		{
+			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			exit(1);
+		}
+		networks[i].netmask = strtoul(tok, NULL, 10);
+		if ( 32 < networks[i].netmask )
+		{
+			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			exit(1);
+		}
+		i++;
+		tok = strtok(NULL, "/");
+	}
+	g_free(in_str);
+
+	for (; n<i; n++)
+	{
+		inet_ntop(AF_INET, &networks[n].addr, ip, INET_ADDRSTRLEN);
+		printf("Parsed network from config: %s/%u\n", ip, networks[n].netmask);
+	}
+}
+
+// Match if is ip in subnet
+gint ip_in_subnet(struct in_addr s_ip, struct in_addr s_subnet, guint netmask)
+{
+
+	struct in_addr s_netmask;
 	guint octets;
-	inet_pton(AF_INET, subnet, &s_subnet);
 	if ( netmask < 0 || netmask > 32 )
 	{
 		return -1;
@@ -112,14 +172,16 @@ gint ip_in_subnet(struct in_addr s_ip, gchar *subnet, guint netmask)
 
 }
 
-// Our nets is here
+// Iterate through our nets here
 gint is_client_ip(struct in_addr ip)
 {
-	// TODO: Somehow get subnets from config
-	return ( ip_in_subnet(ip, "93.95.156.0", 24) ||
-			 ip_in_subnet(ip, "31.13.178.0", 24) ||
-			 ip_in_subnet(ip, "93.171.236.0", 22) );
-
+	guint i;
+	for (i=0; i<networks_cnt; i++)
+	{
+		if ( ip_in_subnet(ip, networks[i].addr, networks[i].netmask) )
+			return 1;
+	}
+	return 0;
 }
 
 // Correctly close all file descriptors in online struct
@@ -143,6 +205,7 @@ void pg_exit()
 	g_hash_table_remove_all(online_ht);
 	g_hash_table_destroy(online_ht);
 	g_hash_table_destroy(traffic_ht);
+	g_free(networks);
 	iniparser_freedict(iniconf);
 	closelog();
 	exit(1);
@@ -352,6 +415,9 @@ int main()
 	// read config
 	read_config("flowtosql.conf");
 
+	// Parse networks
+	parse_networks();
+
 	// current date
 	unix_time = time(NULL) + cfg_tzoffset;
 	tm_date = g_memdup(gmtime(&unix_time), sizeof(struct tm));
@@ -360,6 +426,8 @@ int main()
 	// Connect to PostgreSQL
 	if ( PQstatus(conn = PQconnectdb(cfg_pgconnstr)) == CONNECTION_BAD )
 	{
+		g_free(tm_date);
+		g_free(tm_now);
 		pg_exit();
 	}
 
@@ -513,6 +581,7 @@ int main()
 
 	g_free(tm_now);
 	g_free(tm_date);
+	g_free(networks);
 
 	fclose(unrel_file);
 	iniparser_freedict(iniconf);
