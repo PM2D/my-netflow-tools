@@ -149,6 +149,7 @@ void parse_networks()
 		inet_ntop(AF_INET, &networks[n].addr, ip, INET_ADDRSTRLEN);
 		printf("Parsed network from config: %s/%u\n", ip, networks[n].netmask);
 	}
+
 }
 
 // Match if is ip in subnet
@@ -157,10 +158,6 @@ gint ip_in_subnet(struct in_addr s_ip, struct in_addr s_subnet, guint netmask)
 
 	struct in_addr s_netmask;
 	guint octets;
-	if ( netmask < 0 || netmask > 32 )
-	{
-		return -1;
-	}
 	octets = (netmask + 7) / 8;
 	s_netmask.s_addr = 0;
 	if ( octets > 0 )
@@ -175,6 +172,7 @@ gint ip_in_subnet(struct in_addr s_ip, struct in_addr s_subnet, guint netmask)
 // Iterate through our nets here
 gint is_client_ip(struct in_addr ip)
 {
+
 	guint i;
 	for (i=0; i<networks_cnt; i++)
 	{
@@ -182,6 +180,7 @@ gint is_client_ip(struct in_addr ip)
 			return 1;
 	}
 	return 0;
+
 }
 
 // Correctly close all file descriptors in online struct
