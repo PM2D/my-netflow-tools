@@ -19,7 +19,7 @@ void sigintHandler(int sig_num)
 	close(infile);
 	free(userip_str);
 	free(host_str);
-	exit(1);
+	exit(0);
 }
 
 int main(int argc, char **argv)
