@@ -192,6 +192,18 @@ void free_online(gpointer value)
 
 }
 
+// All globally allocated vars free here
+void free_globals()
+{
+	g_hash_table_remove_all(traffic_ht);
+	g_hash_table_remove_all(online_ht);
+	g_hash_table_destroy(online_ht);
+	g_hash_table_destroy(traffic_ht);
+	g_free(networks);
+	iniparser_freedict(iniconf);
+	closelog();
+}
+
 // For PostgreSQL unexpected termination
 void pg_exit()
 {
@@ -200,13 +212,7 @@ void pg_exit()
 	PQclear(res);
 	PQfinish(conn);
 	if ( NULL != unrel_file ) fclose(unrel_file);
-	g_hash_table_remove_all(traffic_ht);
-	g_hash_table_remove_all(online_ht);
-	g_hash_table_destroy(online_ht);
-	g_hash_table_destroy(traffic_ht);
-	g_free(networks);
-	iniparser_freedict(iniconf);
-	closelog();
+	free_globals();
 	exit(1);
 
 }
@@ -237,13 +243,7 @@ void sigintHandler(int sig_num)
 
 	fputs("\n Termination attempt using Ctrl+C \n Freeing resources \n", stderr);
 	PQfinish(conn);
-	fclose(unrel_file);
-	g_hash_table_remove_all(traffic_ht);
-	g_hash_table_remove_all(online_ht);
-	g_hash_table_destroy(online_ht);
-	g_hash_table_destroy(traffic_ht);
-	iniparser_freedict(iniconf);
-	closelog();
+	free_globals();
 	exit(1);
 
 }
@@ -572,19 +572,10 @@ int main()
 
 	PQfinish(conn);
 
-	// Correctly free and destroy hash tables
-	g_hash_table_remove_all(traffic_ht);
-	g_hash_table_remove_all(online_ht);
-	g_hash_table_destroy(traffic_ht);
-	g_hash_table_destroy(online_ht);
-
 	g_free(tm_now);
 	g_free(tm_date);
-	g_free(networks);
 
-	fclose(unrel_file);
-	iniparser_freedict(iniconf);
-	closelog();
+	free_globals();
 
 	return 0;
 
