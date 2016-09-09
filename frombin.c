@@ -5,52 +5,105 @@
 #include <unistd.h>
 #include <string.h>
 #include <inttypes.h>
+#include <signal.h>
 #include <time.h>
 #include <arpa/inet.h>
 #include "file_format.h"
 
-#define TZOFFSET 25200 // GMT+7
+int infile;
+char *userip_str, *host_str;
 
-int main(int argc, char * argv[])
+// Interrupt signal handler
+void sigintHandler(int sig_num)
+{
+	close(infile);
+	free(userip_str);
+	free(host_str);
+	exit(1);
+}
+
+int main(int argc, char **argv)
 {
 
-	if ( 2 > argc )
+	int c, fmode = 0, tzoffset = 7;
+
+	while ( (c = getopt (argc, argv, "fht:")) != -1 )
+		switch (c)
+		{
+			case 'h':
+				fputs("This utility converts our NetFlow files from our internal format to CSV and prints it to stdout\n", stdout);
+				fputs("Options:\n\t-f don't stop reading (like tail follow mode)\n\t-t offset from UTC (hours)\n", stdout);
+				return 0;
+			break;
+			case 'f':
+				fmode = 1;
+			break;
+			case 't':
+				tzoffset = atoi(optarg);
+			break;
+			case '?':
+				return 1;
+			break;
+			default:
+				abort();
+		}
+	if ( (1 + optind) > argc )
 	{
-		printf("This utility converts our NetFlow files from our internal format to CSV and prints it to stdout\n");
-		printf("Usage: %s Input_File\n", argv[0]);
+		printf("Usage: %s [-fht] Input_File\n", argv[0]);
 		return 0;
 	}
 
-	int infile;
 	char date_str[20];
-	char *userip_str = malloc(INET_ADDRSTRLEN);
-	char *host_str = malloc(INET_ADDRSTRLEN);
+	userip_str = malloc(INET_ADDRSTRLEN);
+	host_str = malloc(INET_ADDRSTRLEN);
 	time_t tmp_usecs;
 	struct FFormat indata;
+	int run = 1;
+	long int bytes_read;
+	struct timespec period;
+	period.tv_sec = 1;
+	period.tv_nsec = 0;
 
-	if ( 0 > (infile = open(argv[1], O_RDONLY, S_IRUSR)) )
+	tzoffset = tzoffset * 60 * 60;
+
+	if ( 0 > (infile = open(argv[optind], O_RDONLY, S_IRUSR)) )
 	{
 		free(userip_str);
 		free(host_str);
-		fprintf(stderr, "Cannot open file %s for reading\n", argv[1]);
+		fprintf(stderr, "Cannot open file %s for reading\n", argv[optind]);
 		return 1;
 	}
 
-	while ( sizeof(indata) == read(infile, &indata, sizeof(indata)) )
+	signal(SIGINT, sigintHandler);
+
+	while ( run )
 	{
-		// date
-		//strftime(date_str, 20, "%F %T", localtime(&indata.unix_time));
-		// faster cause gmtime doesn't allocate memory
-		//indata.unix_time += TZOFFSET;
-		tmp_usecs = indata.unix_time + TZOFFSET;
-		strftime(date_str, 20, "%F %T", gmtime(&tmp_usecs));
-		// userip
-		inet_ntop(AF_INET, &indata.userip, userip_str, INET_ADDRSTRLEN);
-		// host
-		inet_ntop(AF_INET, &indata.host, host_str, INET_ADDRSTRLEN);
+		bytes_read = read(infile, &indata, sizeof(indata));
+		// if correct size was read
+		if ( sizeof(indata) == bytes_read )
+		{
+			// date
+			//strftime(date_str, 20, "%F %T", localtime(&indata.unix_time));
+			// faster cause gmtime doesn't allocate memory
+			tmp_usecs = indata.unix_time + tzoffset;
+			strftime(date_str, 20, "%F %T", gmtime(&tmp_usecs));
+			// userip
+			inet_ntop(AF_INET, &indata.userip, userip_str, INET_ADDRSTRLEN);
+			// host
+			inet_ntop(AF_INET, &indata.host, host_str, INET_ADDRSTRLEN);
 
-		printf("%s\t%s\t%s\t%u\t%u\t%u\t%u\t%u\n", date_str, userip_str, host_str, indata.srcport, indata.dstport, indata.octetsin, indata.octetsout, indata.proto);
-
+			printf("%s\t%s\t%s\t%u\t%u\t%u\t%u\t%u\n", date_str, userip_str, host_str, indata.srcport, indata.dstport, indata.octetsin, indata.octetsout, indata.proto);
+		}
+		else if ( fmode )
+		{
+			// seek back and wait
+			lseek(infile, -bytes_read, SEEK_CUR);
+			nanosleep(&period, NULL);
+		}
+		else
+		{
+			run = 0;
+		}
 	}
 
 	close(infile);
