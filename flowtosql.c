@@ -44,7 +44,7 @@ gint cfg_tzoffset, cfg_lines;
 // Our networks
 typedef struct Network {
 	struct in_addr addr;
-	guint netmask;
+	struct in_addr netmask;
 } Network;
 Network *networks;
 guint networks_cnt = 1;
@@ -109,7 +109,7 @@ void parse_networks()
 {
 
 	gchar *tok, *in_str, ip[16];
-	guint i = 0, n = 0;
+	guint cidr_nmask, i = 0, n = 0;
 	// must be allocated because is restricted
 	in_str = g_strdup(cfg_networks);
 	// count commas in string
@@ -133,12 +133,15 @@ void parse_networks()
 			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
 			exit(1);
 		}
-		networks[i].netmask = strtoul(tok, NULL, 10);
-		if ( 32 < networks[i].netmask )
+		cidr_nmask = strtoul(tok, NULL, 10);
+		if ( 32 < cidr_nmask )
 		{
-			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			fputs("ERROR: Netmask in networks string in config file is not valid.\n", stderr);
 			exit(1);
 		}
+		networks[i].netmask.s_addr = 0xFFFFFFFF;
+		networks[i].netmask.s_addr <<= 32 - cidr_nmask;
+		networks[i].netmask.s_addr = ntohl(networks[i].netmask.s_addr);
 		i++;
 		tok = strtok(NULL, "/");
 	}
@@ -147,37 +150,21 @@ void parse_networks()
 	for (; n<i; n++)
 	{
 		inet_ntop(AF_INET, &networks[n].addr, ip, INET_ADDRSTRLEN);
-		printf("Parsed network from config: %s/%u\n", ip, networks[n].netmask);
+		printf("Parsed network from config: %s/", ip);
+		inet_ntop(AF_INET, &networks[n].netmask, ip, INET_ADDRSTRLEN);
+		printf("%s\n", ip);
 	}
 
 }
 
-// Match if is ip in subnet
-gint ip_in_subnet(struct in_addr s_ip, struct in_addr s_subnet, guint netmask)
-{
-
-	struct in_addr s_netmask;
-	guint octets;
-	octets = (netmask + 7) / 8;
-	s_netmask.s_addr = 0;
-	if ( octets > 0 )
-	{
-		memset(&s_netmask.s_addr, 255, (gsize)octets - 1);
-		memset((guchar *)&s_netmask.s_addr + (octets - 1), (256 - (1 << (32 - netmask) % 8)), 1);
-	}
-	return ((s_ip.s_addr & s_netmask.s_addr) == (s_subnet.s_addr & s_netmask.s_addr));
-
-}
-
-// Iterate through our nets here
+// Match is ip in our nets
 gint is_client_ip(struct in_addr ip)
 {
 
 	guint i;
 	for (i=0; i<networks_cnt; i++)
 	{
-		if ( ip_in_subnet(ip, networks[i].addr, networks[i].netmask) )
-			return 1;
+		return ((ip.s_addr & networks[i].netmask.s_addr) == (networks[i].addr.s_addr & networks[i].netmask.s_addr));
 	}
 	return 0;
 
