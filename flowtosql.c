@@ -239,10 +239,7 @@ void sigintHandler(int sig_num)
 // Flush all open files to disk
 void fflush_iterator(gpointer key, gpointer value, gpointer user_data)
 {
-
 	fflush(((struct Online*)value)->file);
-	fflush(unrel_file);
-
 }
 
 // SIGUSR1 handler
@@ -250,6 +247,7 @@ void sigusr1Handler(int sig_num)
 {
 
 	g_printf("SIGUSR1 caught, flushing files...\n");
+	fflush(unrel_file);
 	g_hash_table_foreach(online_ht, (GHFunc)fflush_iterator, NULL);
 
 }
