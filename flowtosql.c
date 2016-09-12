@@ -164,7 +164,8 @@ gint is_client_ip(struct in_addr ip)
 	guint i;
 	for (i=0; i<networks_cnt; i++)
 	{
-		return ((ip.s_addr & networks[i].netmask.s_addr) == (networks[i].addr.s_addr & networks[i].netmask.s_addr));
+		if ((ip.s_addr & networks[i].netmask.s_addr) == (networks[i].addr.s_addr & networks[i].netmask.s_addr))
+			return 1;
 	}
 	return 0;
 
