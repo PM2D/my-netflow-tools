@@ -48,7 +48,7 @@ FILE *unrel_file;
 
 // Config vars
 dictionary *iniconf;
-const gchar *cfg_networks, *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
+const gchar *cfg_networks, *cfg_exclips, *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
 gint cfg_tzoffset, cfg_lines;
 
 // Our networks
@@ -59,60 +59,9 @@ typedef struct Network {
 Network *networks;
 guint networks_cnt = 1;
 
-// Read config
-void read_config(const gchar * filename)
-{
-
-	iniconf = iniparser_load(filename);
-	if ( NULL == iniconf )
-	{
-		fprintf(stderr, CRED "Config error:" CNRM " Cannot load config file %s\n" CNRM, filename);
-		exit(1);
-	}
-	// UTC + Offset
-	cfg_tzoffset = iniparser_getint(iniconf, "Global:TimezoneOffset", 7);
-	cfg_tzoffset = cfg_tzoffset * 60 * 60;
-	// How much lines to wait
-	cfg_lines = iniparser_getint(iniconf, "Global:Lines", 40000);
-	cfg_lines--;
-	// Subnets
-	if ( NULL == (cfg_networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
-	{
-		fputs(CRED "Config error:" CNRM " Networks is empty.\n" CNRM, stderr);
-		exit(1);
-	}
-	// Dirnames/Filenames
-	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
-	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
-	{
-		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_flowsdir);
-		exit(1);
-	}
-	cfg_unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
-	cfg_unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
-	if ( !g_file_test(cfg_unrelfdir, G_FILE_TEST_IS_DIR) )
-	{
-		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_unrelfdir);
-		exit(1);
-	}
-	// PostgreSQL
-	if ( NULL == (cfg_pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
-	{
-		fputs(CRED "Config error:" CNRM " PostgreSQL connection string is empty.\n" CNRM, stderr);
-		exit(1);
-	}
-	if ( NULL == (cfg_onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
-	{
-		fputs(CRED "Config error:" CNRM " PostgreSQL online query string is empty.\n" CNRM, stderr);
-		exit(1);
-	}
-	if ( NULL == (cfg_insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
-	{
-		fputs(CRED "Config error:" CNRM " PostgreSQL insert query string is empty.\n" CNRM, stderr);
-		exit(1);
-	}
-
-}
+// Excluded IPs
+gchar *excludedips;
+guint excluded_cnt = 1;
 
 // Parse networks string
 void parse_networks()
@@ -167,6 +116,95 @@ void parse_networks()
 
 }
 
+// Parse excluded IPs string
+void parse_excluded()
+{
+	guint i = 0;
+	gchar *tok, *in_str;
+	// must be allocated because is restricted
+	in_str = g_strdup(cfg_exclips);
+	// count commas in string
+	for (; in_str[i]; i++)
+		excluded_cnt += (in_str[i] == ',');
+	excludedips = calloc(excluded_cnt, INET_ADDRSTRLEN * sizeof(*excludedips));
+	// parse string
+	i = 0;
+	tok = strtok(in_str, ",");
+	while ( NULL != tok )
+	{
+		strncpy((excludedips + i), tok, INET_ADDRSTRLEN);
+		printf(CGRN "Parsed excluded IP from config:" CCYN " %s" CNRM "\n", (excludedips + i));
+		tok = strtok(NULL, ",");
+		i += INET_ADDRSTRLEN;
+	}
+	g_free(in_str);
+}
+
+// Read config
+void read_config(const gchar * filename)
+{
+
+	iniconf = iniparser_load(filename);
+	if ( NULL == iniconf )
+	{
+		fprintf(stderr, CRED "Config error:" CNRM " Cannot load config file %s\n" CNRM, filename);
+		exit(1);
+	}
+	// UTC + Offset
+	cfg_tzoffset = iniparser_getint(iniconf, "Global:TimezoneOffset", 7);
+	cfg_tzoffset = cfg_tzoffset * 60 * 60;
+	// How much lines to wait
+	cfg_lines = iniparser_getint(iniconf, "Global:Lines", 40000);
+	cfg_lines--;
+	// Subnets
+	if ( NULL == (cfg_networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
+	{
+		fputs(CRED "Config error:" CNRM " Networks is empty.\n" CNRM, stderr);
+		exit(1);
+	}
+	// Excluded IPs
+	if ( NULL == (cfg_exclips = iniparser_getstring(iniconf, "Global:ExcludedIPs", NULL)) )
+	{
+		excluded_cnt = 0;
+	}
+	// Dirnames/Filenames
+	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
+	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
+	{
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_flowsdir);
+		exit(1);
+	}
+	cfg_unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
+	cfg_unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
+	if ( !g_file_test(cfg_unrelfdir, G_FILE_TEST_IS_DIR) )
+	{
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_unrelfdir);
+		exit(1);
+	}
+	// PostgreSQL
+	if ( NULL == (cfg_pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
+	{
+		fputs(CRED "Config error:" CNRM " PostgreSQL connection string is empty.\n" CNRM, stderr);
+		exit(1);
+	}
+	if ( NULL == (cfg_onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
+	{
+		fputs(CRED "Config error:" CNRM " PostgreSQL online query string is empty.\n" CNRM, stderr);
+		exit(1);
+	}
+	if ( NULL == (cfg_insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
+	{
+		fputs(CRED "Config error:" CNRM " PostgreSQL insert query string is empty.\n" CNRM, stderr);
+		exit(1);
+	}
+
+	// Parse networks
+	parse_networks();
+	// Parse excluded ExcludedIPs
+	parse_excluded();
+
+}
+
 // Match is ip in our nets
 gint is_client_ip(struct in_addr ip)
 {
@@ -179,6 +217,20 @@ gint is_client_ip(struct in_addr ip)
 	}
 	return 0;
 
+}
+
+// Match if ip is excluded
+gint is_excluded(gchar * ip)
+{
+	guint i;
+	for (i=0; i<excluded_cnt; i++)
+	{
+		if ( 0 == strcmp(ip, (excludedips + i * INET_ADDRSTRLEN)) )
+		{
+			return 1;
+		}
+	}
+	return 0;
 }
 
 // Correctly close all file descriptors in online struct
@@ -197,6 +249,7 @@ void free_globals()
 	g_hash_table_remove_all(online_ht);
 	g_hash_table_destroy(online_ht);
 	g_hash_table_destroy(traffic_ht);
+	g_free(excludedips);
 	g_free(networks);
 	iniparser_freedict(iniconf);
 	closelog();
@@ -410,9 +463,6 @@ int main()
 	// read config
 	read_config("flowtosql.conf");
 
-	// Parse networks
-	parse_networks();
-
 	// current date
 	unix_time = time(NULL) + cfg_tzoffset;
 	tm_date = g_memdup(gmtime(&unix_time), sizeof(struct tm));
@@ -459,11 +509,7 @@ int main()
 		outdata.proto = strtoul(inbuff, NULL, 10);
 
 		// Unneeded traffic
-		// TODO: Somehow get from config
-		if (	0 == strcmp(srcaddr_str, "93.95.156.250") ||
-				0 == strcmp(dstaddr_str, "93.95.156.250") ||
-				0 == strcmp(srcaddr_str, "93.171.239.250") ||
-				0 == strcmp(dstaddr_str, "93.171.239.250") )
+		if ( is_excluded(srcaddr_str) || is_excluded(dstaddr_str) )
 		{
 			notused_cnt++;
 			continue;
@@ -546,7 +592,7 @@ int main()
 			// If next hour
 			if ( tm_date->tm_hour != tm_now->tm_hour )
 			{
-				g_printf("   Next hour (%d -> %d). Flushing data...\n", tm_now->tm_hour, tm_date->tm_hour);
+				g_printf("   " CCYN "Next hour (%d -> %d). Flushing data..." CNRM "\n", tm_now->tm_hour, tm_date->tm_hour);
 				// Insert traffic data
 				g_hash_table_foreach(traffic_ht, (GHFunc)traffic_insert, tm_date);
 				// Clear traffic data
