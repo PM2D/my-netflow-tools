@@ -12,6 +12,16 @@
 #include <iniparser.h>
 #include "file_format.h"
 
+// Terminal colors
+#define CNRM  "\x1B[0m"
+#define CRED  "\x1B[31m"
+#define CGRN  "\x1B[32m"
+#define CYEL  "\x1B[33m"
+#define CBLU  "\x1B[34m"
+#define CMAG  "\x1B[35m"
+#define CCYN  "\x1B[36m"
+#define CWHT  "\x1B[37m"
+
 // PostgreSQL variables
 PGconn *conn;
 PGresult *res;
@@ -56,7 +66,7 @@ void read_config(const gchar * filename)
 	iniconf = iniparser_load(filename);
 	if ( NULL == iniconf )
 	{
-		fprintf(stderr, "Cannot load config file %s\n", filename);
+		fprintf(stderr, CRED "Config error:" CNRM " Cannot load config file %s\n" CNRM, filename);
 		exit(1);
 	}
 	// UTC + Offset
@@ -68,37 +78,37 @@ void read_config(const gchar * filename)
 	// Subnets
 	if ( NULL == (cfg_networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
 	{
-		fputs("ERROR: Networks is empty.\n", stderr);
+		fputs(CRED "Config error:" CNRM " Networks is empty.\n" CNRM, stderr);
 		exit(1);
 	}
 	// Dirnames/Filenames
 	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
 	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
 	{
-		fprintf(stderr, "ERROR: No such directory: %s\n", cfg_flowsdir);
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_flowsdir);
 		exit(1);
 	}
 	cfg_unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
 	cfg_unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
 	if ( !g_file_test(cfg_unrelfdir, G_FILE_TEST_IS_DIR) )
 	{
-		fprintf(stderr, "ERROR: No such directory: %s\n", cfg_unrelfdir);
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_unrelfdir);
 		exit(1);
 	}
 	// PostgreSQL
 	if ( NULL == (cfg_pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
 	{
-		fputs("ERROR: PostgreSQL connection string is empty.\n", stderr);
+		fputs(CRED "Config error:" CNRM " PostgreSQL connection string is empty.\n" CNRM, stderr);
 		exit(1);
 	}
 	if ( NULL == (cfg_onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
 	{
-		fputs("ERROR: PostgreSQL online query string is empty.\n", stderr);
+		fputs(CRED "Config error:" CNRM " PostgreSQL online query string is empty.\n" CNRM, stderr);
 		exit(1);
 	}
 	if ( NULL == (cfg_insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
 	{
-		fputs("ERROR: PostgreSQL insert query string is empty.\n", stderr);
+		fputs(CRED "Config error:" CNRM " PostgreSQL insert query string is empty.\n" CNRM, stderr);
 		exit(1);
 	}
 
@@ -125,18 +135,18 @@ void parse_networks()
 		// rude exit on any error
 		if ( 0 == inet_pton(AF_INET, tok, &(networks[i].addr)) )
 		{
-			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			fputs(CRED "Config error:" CNRM " Networks string in config file is not valid.\n" CNRM, stderr);
 			exit(1);
 		}
 		if ( NULL == (tok = strtok(NULL, ",")) )
 		{
-			fputs("ERROR: Networks string in config file is not valid.\n", stderr);
+			fputs(CRED "Config error:" CNRM " Networks string in config file is not valid.\n", stderr);
 			exit(1);
 		}
 		cidr_nmask = strtoul(tok, NULL, 10);
 		if ( 32 < cidr_nmask )
 		{
-			fputs("ERROR: Netmask in networks string in config file is not valid.\n", stderr);
+			fputs(CRED "Config error:" CNRM " Netmask in networks string in config file is not valid.\n", stderr);
 			exit(1);
 		}
 		networks[i].netmask.s_addr = 0xFFFFFFFF;
@@ -150,9 +160,9 @@ void parse_networks()
 	for (; n<i; n++)
 	{
 		inet_ntop(AF_INET, &networks[n].addr, ip, INET_ADDRSTRLEN);
-		printf("Parsed network from config: %s/", ip);
+		printf(CGRN "Parsed network from config:" CCYN " %s/", ip);
 		inet_ntop(AF_INET, &networks[n].netmask, ip, INET_ADDRSTRLEN);
-		printf("%s\n", ip);
+		printf("%s" CNRM "\n", ip);
 	}
 
 }
@@ -196,7 +206,7 @@ void free_globals()
 void pg_exit()
 {
 
-	fprintf(stderr, "PostgreSQL error: %s\n", PQerrorMessage(conn));
+	fprintf(stderr, CRED "PostgreSQL error:" CNRM " %s\n", PQerrorMessage(conn));
 	PQclear(res);
 	PQfinish(conn);
 	if ( NULL != unrel_file ) fclose(unrel_file);
@@ -229,7 +239,7 @@ void traffic_insert(gpointer key, gpointer value, struct tm *date )
 void sigintHandler(int sig_num)
 {
 
-	fputs("\n Termination attempt using Ctrl+C \n Freeing resources \n", stderr);
+	fputs(CYEL "\n Termination attempt using Ctrl+C" CNRM "\n Freeing resources \n", stderr);
 	PQfinish(conn);
 	free_globals();
 	exit(1);
@@ -246,7 +256,7 @@ void fflush_iterator(gpointer key, gpointer value, gpointer user_data)
 void sigusr1Handler(int sig_num)
 {
 
-	g_printf("SIGUSR1 caught, flushing files...\n");
+	g_printf(CMAG "SIGUSR1 caught, flushing files..." CNRM "\n");
 	fflush(unrel_file);
 	g_hash_table_foreach(online_ht, (GHFunc)fflush_iterator, NULL);
 
@@ -291,8 +301,8 @@ void update_hash_tables_from_db()
 			// but if it belongs to another user
 			if ( 0 != strcmp(online_cmp->username, online->username) )
 			{
-				g_printf("   IP address %s now belongs to user %s\n", framedipaddr, online->username);
-				syslog(LOG_NOTICE, "flowtosql: IP %s relation changed to user %s", framedipaddr, online->username);
+				g_printf("   " CYEL "IP address " CCYN "%s" CYEL " now belongs to user " CCYN "%s" CNRM "\n", framedipaddr, online->username);
+				syslog(LOG_NOTICE, "IP %s relation changed to user %s", framedipaddr, online->username);
 				// Constructing directory name
 				g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
 				// If directory does not exists, create it
@@ -327,7 +337,7 @@ void update_hash_tables_from_db()
 		else
 		{
 
-			printf("   New user connected: %s %s\n", framedipaddr, online->username);
+			printf("   " CYEL "New user connected:" CCYN " %s %s" CNRM "\n", framedipaddr, online->username);
 			// Constructing directory name
 			g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
 			// If directory does not exists, create it
@@ -356,7 +366,7 @@ void update_hash_tables_from_db()
 	g_free(filename);
 	g_free(dirname);
 
-	g_printf("   %d items in the hash table, continuing\n", g_hash_table_size(online_ht));
+	g_printf("   " CGRN "%d items in the hash table, continuing" CNRM "\n", g_hash_table_size(online_ht));
 
 }
 
@@ -370,7 +380,7 @@ int main()
 	signal(SIGUSR1, sigusr1Handler);
 
 	// For syslog logging
-	openlog("billing", 0, LOG_USER);
+	openlog("flowtosql", 0, LOG_USER);
 
 	// stdin line buffer
 	gchar line[256];
@@ -515,12 +525,12 @@ int main()
 			unix_time = time(NULL) + cfg_tzoffset;
 			memcpy(tm_date, gmtime(&unix_time), sizeof(struct tm));
 
-			printf("%d hours, DB data sync:\n", tm_date->tm_hour);
+			printf(CYEL "%d hours, DB data sync:" CNRM "\n", tm_date->tm_hour);
 
 			// If next day
 			if ( tm_date->tm_yday != tm_now->tm_yday )
 			{
-				g_printf("End of a day (%d -> %d), rotating unrelated flows file\n", tm_now->tm_yday, tm_date->tm_yday);
+				g_printf(CMAG "End of a day (%d -> %d), rotating unrelated flows file" CNRM "\n", tm_now->tm_yday, tm_date->tm_yday);
 				// Move temp unrelated flows file
 				filename = g_malloc(256 * sizeof(gchar));
 				// Constructing full path to new filename
@@ -545,7 +555,7 @@ int main()
 				g_hash_table_remove_all(online_ht);
 				// Renew date_now just in case
 				strftime(date_now, 11, "%F", tm_date);
-				syslog(LOG_INFO, "flowtosql: processed %u NetFlow lines, unrelated %u, not used %u", total_cnt, unrelated_cnt, notused_cnt);
+				syslog(LOG_INFO, "processed %u NetFlow lines, unrelated %u, not used %u", total_cnt, unrelated_cnt, notused_cnt);
 				notused_cnt = unrelated_cnt = total_cnt = 0;
 				*tm_now = *tm_date;
 			}
