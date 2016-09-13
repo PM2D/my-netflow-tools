@@ -2,8 +2,10 @@
 
 // Config vars
 dictionary *iniconf;
-const gchar *cfg_networks, *cfg_exclips, *cfg_flowsdir, *cfg_unrelflows, *cfg_unrelfdir, *cfg_pgconnstr, *cfg_onlinequery, *cfg_insertquery;
-gint cfg_tzoffset, cfg_lines;
+struct Cfg {
+	const gchar *networks, *exclips, *flowsdir, *unrelflows, *unrelfdir, *pgconnstr, *onlinequery, *insertquery;
+	gint tzoffset, lines;
+} cfg;
 
 // Our networks
 typedef struct Network {

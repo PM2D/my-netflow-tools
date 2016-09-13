@@ -75,7 +75,7 @@ void traffic_insert(gpointer key, gpointer value, struct tm *date )
 	strftime(date_now, 20, "%F", date);
 	hours = (0 < date->tm_hour) ? (date->tm_hour - 1) : 23;
 
-	g_sprintf(query, "%s VALUES (%d, '%s', %d, %llu, %llu)", cfg_insertquery, *(gint*)key, date_now, hours, ((struct Traffic*)value)->octetsin, ((struct Traffic*)value)->octetsout);
+	g_sprintf(query, "%s VALUES (%d, '%s', %d, %llu, %llu)", cfg.insertquery, *(gint*)key, date_now, hours, ((struct Traffic*)value)->octetsin, ((struct Traffic*)value)->octetsout);
 	res = PQexec(conn, query);
 	if ( PQresultStatus(res) != PGRES_COMMAND_OK )
 	{
@@ -123,11 +123,11 @@ void update_hash_tables_from_db()
 	time_t date_time;
 
 	// current date
-	date_time = time(NULL) + cfg_tzoffset;
+	date_time = time(NULL) + cfg.tzoffset;
 	date_tm = gmtime(&date_time);
 	strftime(date_str, 11, "%F", date_tm);
 
-	res = PQexec(conn, cfg_onlinequery);
+	res = PQexec(conn, cfg.onlinequery);
 	if ( PQresultStatus(res) != PGRES_TUPLES_OK )
 	{
 		pg_exit();
@@ -154,7 +154,7 @@ void update_hash_tables_from_db()
 				g_printf("   " CYEL "IP address " CCYN "%s" CYEL " now belongs to user " CCYN "%s" CNRM "\n", framedipaddr, online->username);
 				syslog(LOG_NOTICE, "IP %s relation changed to user %s", framedipaddr, online->username);
 				// Constructing directory name
-				g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
+				g_sprintf(dirname, "%s/%s", cfg.flowsdir, online->username);
 				// If directory does not exists, create it
 				if ( !g_file_test(dirname, G_FILE_TEST_IS_DIR) )
 				{
@@ -189,7 +189,7 @@ void update_hash_tables_from_db()
 
 			printf("   " CYEL "New user connected:" CCYN " %s %s" CNRM "\n", framedipaddr, online->username);
 			// Constructing directory name
-			g_sprintf(dirname, "%s/%s", cfg_flowsdir, online->username);
+			g_sprintf(dirname, "%s/%s", cfg.flowsdir, online->username);
 			// If directory does not exists, create it
 			if ( !g_file_test(dirname, G_FILE_TEST_IS_DIR) )
 			{
@@ -261,12 +261,12 @@ int main()
 	read_config("flowtosql.conf");
 
 	// current date
-	unix_time = time(NULL) + cfg_tzoffset;
+	unix_time = time(NULL) + cfg.tzoffset;
 	tm_date = g_memdup(gmtime(&unix_time), sizeof(struct tm));
 	tm_now = g_memdup(gmtime(&unix_time), sizeof(struct tm));
 
 	// Connect to PostgreSQL
-	if ( PQstatus(conn = PQconnectdb(cfg_pgconnstr)) == CONNECTION_BAD )
+	if ( PQstatus(conn = PQconnectdb(cfg.pgconnstr)) == CONNECTION_BAD )
 	{
 		g_free(tm_date);
 		g_free(tm_now);
@@ -277,7 +277,7 @@ int main()
 	update_hash_tables_from_db();
 
 	// Open temp file for unrelated flows
-	unrel_file = fopen(cfg_unrelflows, "ab");
+	unrel_file = fopen(cfg.unrelflows, "ab");
 
 	// Skip first line
 	fgets(line, 256, stdin);
@@ -355,17 +355,17 @@ int main()
 			unrelated_cnt++;
 			// if unrelated line is meet, then we better update a data faster
 			// but not immediately because there can be different kinds of unrelated flows
-			lines_cnt += (cfg_lines / 100);
+			lines_cnt += (cfg.lines / 100);
 		}
 
 		lines_cnt++;
 		total_cnt++;
 
-		if ( lines_cnt > cfg_lines )
+		if ( lines_cnt > cfg.lines )
 		{
 
 			lines_cnt = 0;
-			unix_time = time(NULL) + cfg_tzoffset;
+			unix_time = time(NULL) + cfg.tzoffset;
 			memcpy(tm_date, gmtime(&unix_time), sizeof(struct tm));
 
 			printf(CYEL "%d hours, DB data sync:" CNRM "\n", tm_date->tm_hour);
@@ -378,10 +378,10 @@ int main()
 				filename = g_malloc(256 * sizeof(gchar));
 				// Constructing full path to new filename
 				strftime(date_now, 11, "%F", tm_now);
-				g_sprintf(filename, "%s/%s.bin", cfg_unrelfdir, date_now);
+				g_sprintf(filename, "%s/%s.bin", cfg.unrelfdir, date_now);
 				fclose(unrel_file);
-				rename(cfg_unrelflows, filename);
-				unrel_file = fopen(cfg_unrelflows, "ab");
+				rename(cfg.unrelflows, filename);
+				unrel_file = fopen(cfg.unrelflows, "ab");
 				g_free(filename);
 
 			}

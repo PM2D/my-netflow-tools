@@ -8,7 +8,7 @@ static void parse_networks()
 	gchar *tok, *in_str, ip[16];
 	guint cidr_nmask, i = 0, n = 0;
 	// must be allocated because is restricted
-	in_str = g_strdup(cfg_networks);
+	in_str = g_strdup(cfg.networks);
 	// count commas in string
 	for (; in_str[i]; i++)
 		networks_cnt += (in_str[i] == ',');
@@ -60,7 +60,7 @@ static void parse_excluded()
 	guint i = 0;
 	gchar *tok, *in_str;
 	// must be allocated because is restricted
-	in_str = g_strdup(cfg_exclips);
+	in_str = g_strdup(cfg.exclips);
 	// count commas in string
 	for (; in_str[i]; i++)
 		excluded_cnt += (in_str[i] == ',');
@@ -92,48 +92,48 @@ void read_config(const gchar * filename)
 	networks_cnt = excluded_cnt = 1;
 
 	// UTC + Offset
-	cfg_tzoffset = iniparser_getint(iniconf, "Global:TimezoneOffset", 7);
-	cfg_tzoffset = cfg_tzoffset * 60 * 60;
+	cfg.tzoffset = iniparser_getint(iniconf, "Global:TimezoneOffset", 7);
+	cfg.tzoffset = cfg.tzoffset * 60 * 60;
 	// How much lines to wait
-	cfg_lines = iniparser_getint(iniconf, "Global:Lines", 40000);
-	cfg_lines--;
+	cfg.lines = iniparser_getint(iniconf, "Global:Lines", 40000);
+	cfg.lines--;
 	// Subnets
-	if ( NULL == (cfg_networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
+	if ( NULL == (cfg.networks = iniparser_getstring(iniconf, "Global:Networks", NULL)) )
 	{
 		fputs(CRED "Config error:" CNRM " Networks is empty.\n" CNRM, stderr);
 		exit(1);
 	}
 	// Excluded IPs
-	if ( NULL == (cfg_exclips = iniparser_getstring(iniconf, "Global:ExcludedIPs", NULL)) )
+	if ( NULL == (cfg.exclips = iniparser_getstring(iniconf, "Global:ExcludedIPs", NULL)) )
 	{
 		excluded_cnt = 0;
 	}
 	// Dirnames/Filenames
-	cfg_flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
-	if ( !g_file_test(cfg_flowsdir, G_FILE_TEST_IS_DIR) )
+	cfg.flowsdir = iniparser_getstring(iniconf, "Flows:UsersDir", NULL);
+	if ( !g_file_test(cfg.flowsdir, G_FILE_TEST_IS_DIR) )
 	{
-		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_flowsdir);
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg.flowsdir);
 		exit(1);
 	}
-	cfg_unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
-	cfg_unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
-	if ( !g_file_test(cfg_unrelfdir, G_FILE_TEST_IS_DIR) )
+	cfg.unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
+	cfg.unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
+	if ( !g_file_test(cfg.unrelfdir, G_FILE_TEST_IS_DIR) )
 	{
-		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg_unrelfdir);
+		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg.unrelfdir);
 		exit(1);
 	}
 	// PostgreSQL
-	if ( NULL == (cfg_pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
+	if ( NULL == (cfg.pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
 	{
 		fputs(CRED "Config error:" CNRM " PostgreSQL connection string is empty.\n" CNRM, stderr);
 		exit(1);
 	}
-	if ( NULL == (cfg_onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
+	if ( NULL == (cfg.onlinequery = iniparser_getstring(iniconf, "PGSQL:OnlineQuery", NULL)) )
 	{
 		fputs(CRED "Config error:" CNRM " PostgreSQL online query string is empty.\n" CNRM, stderr);
 		exit(1);
 	}
-	if ( NULL == (cfg_insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
+	if ( NULL == (cfg.insertquery = iniparser_getstring(iniconf, "PGSQL:InsertQuery", NULL)) )
 	{
 		fputs(CRED "Config error:" CNRM " PostgreSQL insert query string is empty.\n" CNRM, stderr);
 		exit(1);
