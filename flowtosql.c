@@ -22,7 +22,7 @@ gint is_excluded(gchar * ip)
 	guint i;
 	for (i=0; i<excluded_cnt; i++)
 	{
-		if ( 0 == strcmp(ip, (excludedips + i * INET_ADDRSTRLEN)) )
+		if ( 0 == memcmp(ip, (excludedips + i * INET_ADDRSTRLEN), INET_ADDRSTRLEN) )
 		{
 			return 1;
 		}
@@ -216,7 +216,7 @@ void update_hash_tables_from_db()
 	g_free(filename);
 	g_free(dirname);
 
-	g_printf("   " CGRN "%d items in the hash table, continuing" CNRM "\n", g_hash_table_size(online_ht));
+	g_printf("   " CGRN "%d users online, %d items in the hash table, continuing" CNRM "\n", rows, g_hash_table_size(online_ht));
 
 }
 
@@ -389,7 +389,7 @@ int main()
 			// If next hour
 			if ( tm_date->tm_hour != tm_now->tm_hour )
 			{
-				g_printf("   " CCYN "Next hour (%d -> %d). Flushing data..." CNRM "\n", tm_now->tm_hour, tm_date->tm_hour);
+				g_printf("   " CMAG "Next hour (%d -> %d). Flushing data..." CNRM "\n", tm_now->tm_hour, tm_date->tm_hour);
 				// Insert traffic data
 				g_hash_table_foreach(traffic_ht, (GHFunc)traffic_insert, tm_date);
 				// Clear traffic data
