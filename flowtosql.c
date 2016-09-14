@@ -3,7 +3,7 @@
 #include "file_format.h"
 
 // Match is ip in our nets
-gint is_client_ip(struct in_addr ip)
+inline gint is_client_ip(struct in_addr ip)
 {
 
 	guint i;
@@ -17,7 +17,7 @@ gint is_client_ip(struct in_addr ip)
 }
 
 // Match if ip is excluded
-gint is_excluded(gchar * ip)
+inline gint is_excluded(gchar * ip)
 {
 	guint i;
 	for (i=0; i<excluded_cnt; i++)
