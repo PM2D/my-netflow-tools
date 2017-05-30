@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 					// while something is wrong with data try to seek forward one byte
 					lseek(infile, 1, SEEK_CUR);
 					bytes_read = read(infile, &indata, sizeof(indata));
-				} while ( indata.unix_time > max_usecs_shift || indata.unix_time > now );
+				} while ( indata.unix_time < min_usecs_shift || indata.unix_time > now );
 			}
 			// date
 			//strftime(date_str, 20, "%F %T", localtime(&indata.unix_time));
