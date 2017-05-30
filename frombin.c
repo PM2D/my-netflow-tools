@@ -56,14 +56,21 @@ int main(int argc, char **argv)
 	char date_str[20];
 	userip_str = malloc(INET_ADDRSTRLEN);
 	host_str = malloc(INET_ADDRSTRLEN);
-	time_t tmp_usecs;
+	time_t tmp_usecs, now;
 	struct FFormat indata;
 	int run = 1;
+	int bytes_offset = 0;
 	long int bytes_read;
 	struct timespec period;
 	period.tv_sec = 1;
 	period.tv_nsec = 0;
-
+	// get current timestamp
+	now = time(NULL);
+	// ugly check for binary data consistency
+	// date of flow must match +- 6 years from current timestamp
+	time_t max_usecs_shift = now + (60 * 60 * 24 * 365 * 6);
+	time_t min_usecs_shift = now - (60 * 60 * 24 * 365 * 6);
+	// make timezone offset in hours
 	tzoffset = tzoffset * 60 * 60;
 
 	if ( 0 > (infile = open(argv[optind], O_RDONLY, S_IRUSR)) )
@@ -82,6 +89,17 @@ int main(int argc, char **argv)
 		// if correct size was read
 		if ( sizeof(indata) == bytes_read )
 		{
+			// ugly binary consistency check
+			if ( indata.unix_time > max_usecs_shift || indata.unix_time < min_usecs_shift )
+			{
+				fprintf(stderr, "Binary inconsistency detected, offset %u. Recovering...\n", bytes_offset);
+				do
+				{
+					// while something is wrong with data try to seek forward one byte
+					lseek(infile, 1, SEEK_CUR);
+					bytes_read = read(infile, &indata, sizeof(indata));
+				} while ( indata.unix_time > max_usecs_shift || indata.unix_time < now - min_usecs_shift );
+			}
 			// date
 			//strftime(date_str, 20, "%F %T", localtime(&indata.unix_time));
 			// faster cause gmtime doesn't allocate memory
@@ -93,6 +111,7 @@ int main(int argc, char **argv)
 			inet_ntop(AF_INET, &indata.host, host_str, INET_ADDRSTRLEN);
 
 			printf("%s\t%s\t%s\t%u\t%u\t%u\t%u\t%u\n", date_str, userip_str, host_str, indata.srcport, indata.dstport, indata.octetsin, indata.octetsout, indata.proto);
+			bytes_offset += bytes_read;
 		}
 		else if ( fmode )
 		{
