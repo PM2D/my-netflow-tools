@@ -67,8 +67,7 @@ int main(int argc, char **argv)
 	// get current timestamp
 	now = time(NULL);
 	// ugly check for binary data consistency
-	// date of flow must match +- 6 years from current timestamp
-	time_t max_usecs_shift = now + (60 * 60 * 24 * 365 * 6);
+	// date of flow must not be older than 8 years from current timestamp
 	time_t min_usecs_shift = now - (60 * 60 * 24 * 365 * 6);
 	// make timezone offset in hours
 	tzoffset = tzoffset * 60 * 60;
@@ -90,7 +89,7 @@ int main(int argc, char **argv)
 		if ( sizeof(indata) == bytes_read )
 		{
 			// ugly binary consistency check
-			if ( indata.unix_time > max_usecs_shift || indata.unix_time < min_usecs_shift )
+			if ( indata.unix_time < min_usecs_shift || indata.unix_time > now )
 			{
 				fprintf(stderr, "Binary inconsistency detected, offset %u. Recovering...\n", bytes_offset);
 				do
@@ -98,7 +97,7 @@ int main(int argc, char **argv)
 					// while something is wrong with data try to seek forward one byte
 					lseek(infile, 1, SEEK_CUR);
 					bytes_read = read(infile, &indata, sizeof(indata));
-				} while ( indata.unix_time > max_usecs_shift || indata.unix_time < now - min_usecs_shift );
+				} while ( indata.unix_time > max_usecs_shift || indata.unix_time > now );
 			}
 			// date
 			//strftime(date_str, 20, "%F %T", localtime(&indata.unix_time));
