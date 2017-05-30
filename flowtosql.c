@@ -112,6 +112,17 @@ void sigusr1Handler(int sig_num)
 
 }
 
+// Test. SIGSEGV handler
+void sigsegvHandler(int sig_num)
+{
+
+	g_printf(CMAG "SIGSEGV caught, flushing files..." CNRM "\n");
+	fflush(unrel_file);
+	g_hash_table_foreach(online_ht, (GHFunc)fflush_iterator, NULL);
+	exit(sig_num);
+
+}
+
 void update_hash_tables_from_db()
 {
 
@@ -228,6 +239,8 @@ int main()
 	// Our custom signal handlers
 	signal(SIGINT, sigintHandler);
 	signal(SIGUSR1, sigusr1Handler);
+	// Test. Free buffers
+	signal(SIGSEGV, sigsegvHandler);
 
 	// For syslog logging
 	openlog("flowtosql", 0, LOG_USER);
