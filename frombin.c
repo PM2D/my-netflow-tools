@@ -25,14 +25,16 @@ void sigintHandler(int sig_num)
 int main(int argc, char **argv)
 {
 
-	int c, fmode = 0, tzoffset = 7;
+	int c, fmode = 0, tzoffset = 7, noheader = 0, ip_search = 0, ip_search_len = 0;
+	char *ip_search_str = NULL;
 
-	while ( (c = getopt (argc, argv, "fht:")) != -1 )
+	while ( (c = getopt (argc, argv, "fhns:t:")) != -1 )
 		switch (c)
 		{
 			case 'h':
 				fputs("This utility converts our NetFlow files from our internal format to CSV and prints it to stdout\n", stdout);
-				fputs("Options:\n\t-f don't stop reading (like tail follow mode)\n\t-t offset from UTC (hours)\n", stdout);
+				fputs("Options:\n\t-f : don't stop reading (like tail follow mode)\n\t-t : offset from UTC (hours)\n", stdout);
+				fputs("\t-n : don't print header\n\t-s <ip> : print only rows what matching first given <ip> symbols\n", stdout);
 				return 0;
 			break;
 			case 'f':
@@ -40,6 +42,14 @@ int main(int argc, char **argv)
 			break;
 			case 't':
 				tzoffset = atoi(optarg);
+			break;
+			case 'n':
+				noheader = 1;
+			break;
+			case 's':
+				ip_search = 1;
+				ip_search_str = optarg;
+				ip_search_len = strlen(ip_search_str);
 			break;
 			case '?':
 				return 1;
@@ -49,7 +59,7 @@ int main(int argc, char **argv)
 		}
 	if ( (1 + optind) > argc )
 	{
-		printf("Usage: %s [-fht] Input_File\n", argv[0]);
+		printf("Usage: %s [-fhnst] Input_File\n", argv[0]);
 		return 0;
 	}
 
@@ -82,6 +92,12 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, sigintHandler);
 
+	// Header
+	if ( noheader == 0 )
+	{
+		printf("<DATE_TIME>\t<USER_IP>\t<HOST_IP>\t<SRC_PORT>\t<DST_PORT>\t<OCTETS_IN>\t<OCTETS_OUT>\t<PROTOCOL>\n");
+	}
+
 	while ( run )
 	{
 		bytes_read = read(infile, &indata, sizeof(indata));
@@ -109,8 +125,14 @@ int main(int argc, char **argv)
 			// host
 			inet_ntop(AF_INET, &indata.host, host_str, INET_ADDRSTRLEN);
 
-			printf("%s\t%s\t%s\t%u\t%u\t%u\t%u\t%u\n", date_str, userip_str, host_str, indata.srcport, indata.dstport, indata.octetsin, indata.octetsout, indata.proto);
 			bytes_offset += bytes_read;
+
+			if ( ip_search == 1 && ! (strncmp(ip_search_str, host_str, ip_search_len) == 0 || strncmp(ip_search_str, userip_str, ip_search_len) == 0) )
+			{
+				continue;
+			}
+
+			printf("%s\t%s\t%s\t%u\t%u\t%u\t%u\t%u\n", date_str, userip_str, host_str, indata.srcport, indata.dstport, indata.octetsin, indata.octetsout, indata.proto);
 		}
 		else if ( fmode )
 		{
