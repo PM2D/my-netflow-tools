@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 	// get current timestamp
 	now = time(NULL);
 	// ugly check for binary data consistency
-	// date of flow must not be older than 8 years from current timestamp
+	// date of flow must not be older than 6 years from current timestamp
 	time_t min_usecs_shift = now - (60 * 60 * 24 * 365 * 6);
 	// make timezone offset in hours
 	tzoffset = tzoffset * 60 * 60;
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 				do
 				{
 					// while something is wrong with data try to seek forward one byte
-					lseek(infile, 1, SEEK_CUR);
+					bytes_offset = lseek(infile, 1, SEEK_CUR);
 					bytes_read = read(infile, &indata, sizeof(indata));
 				} while ( indata.unix_time < min_usecs_shift || indata.unix_time > now );
 			}
