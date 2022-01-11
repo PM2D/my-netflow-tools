@@ -1,4 +1,3 @@
-#include "flowtosql.h"
 #include "cfg.h"
 
 // Parse networks string
@@ -116,12 +115,19 @@ void read_config(const gchar * filename)
 		exit(1);
 	}
 	cfg.unrelflows = iniparser_getstring(iniconf, "Flows:UnrelatedFile", NULL);
+	cfg.hostsfile = iniparser_getstring(iniconf, "Flows:HostsFile", NULL);
 	cfg.unrelfdir = iniparser_getstring(iniconf, "Flows:UnrelatedDir", NULL);
+	cfg.hostsdir = iniparser_getstring(iniconf, "Flows:HostsDir", NULL);
 	if ( !g_file_test(cfg.unrelfdir, G_FILE_TEST_IS_DIR) )
 	{
-		fprintf(stderr, CRED "Config error:" CNRM " No such directory: %s\n" CNRM, cfg.unrelfdir);
+		fprintf(stderr, CRED "Config error:" CNRM " No such unrelated flows directory: %s\n" CNRM, cfg.unrelfdir);
 		exit(1);
 	}
+        if ( !g_file_test(cfg.hostsdir, G_FILE_TEST_IS_DIR) )
+        {
+                fprintf(stderr, CRED "Config error:" CNRM " No such hosts files directory: %s\n" CNRM, cfg.hostsdir);
+                exit(1);
+        }
 	// PostgreSQL
 	if ( NULL == (cfg.pgconnstr = iniparser_getstring(iniconf, "PGSQL:ConnectionString", NULL)) )
 	{

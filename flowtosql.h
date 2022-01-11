@@ -30,7 +30,7 @@ GHashTable *online_ht, *traffic_ht;
 // online structure
 struct Online {
 	gchar username[32];
-	gint uid;
+	int uid;
 	FILE *file;
 };
 
@@ -43,3 +43,6 @@ struct Traffic {
 
 // Unrelated flows file
 FILE *unrel_file;
+
+// Hosts relations file
+FILE *hosts_file;

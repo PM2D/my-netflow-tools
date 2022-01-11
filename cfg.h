@@ -3,7 +3,7 @@
 // Config vars
 dictionary *iniconf;
 struct Cfg {
-	const gchar *networks, *exclips, *flowsdir, *unrelflows, *unrelfdir, *pgconnstr, *onlinequery, *insertquery;
+	const gchar *networks, *exclips, *flowsdir, *unrelflows, *hostsfile, *unrelfdir, *hostsdir, *pgconnstr, *onlinequery, *insertquery;
 	gint tzoffset, lines;
 } cfg;
 
@@ -17,6 +17,6 @@ guint networks_cnt;
 
 // Excluded IPs
 gchar *excludedips;
-guint excluded_cnt; 
+guint excluded_cnt;
 
 void read_config(const gchar * filename);

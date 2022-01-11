@@ -1,9 +1,9 @@
 #include "flowtosql.h"
-#include "cfg.h"
+#include "cfg.c"
 #include "file_format.h"
 
 // Match is ip in our nets
-inline gint is_client_ip(struct in_addr ip)
+gint is_client_ip(struct in_addr ip)
 {
 
 	guint i;
@@ -17,7 +17,7 @@ inline gint is_client_ip(struct in_addr ip)
 }
 
 // Match if ip is excluded
-inline gint is_excluded(gchar * ip)
+gint is_excluded(gchar * ip)
 {
 	guint i;
 	for (i=0; i<excluded_cnt; i++)
@@ -60,6 +60,7 @@ void pg_exit()
 	PQclear(res);
 	PQfinish(conn);
 	if ( NULL != unrel_file ) fclose(unrel_file);
+	if ( NULL != hosts_file ) fclose(hosts_file);
 	free_globals();
 	exit(1);
 
@@ -108,6 +109,7 @@ void sigusr1Handler(int sig_num)
 
 	g_printf(CMAG "SIGUSR1 caught, flushing files..." CNRM "\n");
 	fflush(unrel_file);
+	fflush(hosts_file);
 	g_hash_table_foreach(online_ht, (GHFunc)fflush_iterator, NULL);
 
 }
@@ -127,7 +129,7 @@ void update_hash_tables_from_db()
 {
 
 	gchar *framedipaddr, *filename, *dirname, date_str[11];
-	gint i, rows, *uid;
+	int i, rows, *uid;
 	struct Online *online, *online_cmp;
 	struct Traffic *traffic;
 	struct tm *date_tm;
@@ -182,7 +184,7 @@ void update_hash_tables_from_db()
 				if ( NULL == (traffic = g_hash_table_lookup(traffic_ht, &(online->uid))) )
 				{
 					// ...then create it
-					uid = g_memdup(&(online->uid), sizeof(gint)); // key must be allocated
+					uid = g_memdup2(&(online->uid), sizeof(gint)); // key must be allocated
 					traffic = g_malloc(sizeof(struct Traffic));
 					traffic->octetsin = 0;
 					traffic->octetsout = 0;
@@ -214,7 +216,7 @@ void update_hash_tables_from_db()
 			g_hash_table_insert(online_ht, g_strdup(framedipaddr), online);
 
 			// Insert data in traffic hash table
-			uid = g_memdup(&(online->uid), sizeof(gint)); // table key must be allocated
+			uid = g_memdup2(&(online->uid), sizeof(gint)); // table key must be allocated
 			traffic = g_malloc(sizeof(struct Traffic));
 			traffic->octetsin = 0;
 			traffic->octetsout = 0;
@@ -255,6 +257,7 @@ int main()
 	gchar srcaddr_str[INET_ADDRSTRLEN], dstaddr_str[INET_ADDRSTRLEN], *userip_str;
 	// for output
 	struct FFormat outdata;
+	struct RFFormat outhosts;
 	// HashTables
 	online_ht = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_online);
 	traffic_ht = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
@@ -275,8 +278,8 @@ int main()
 
 	// current date
 	unix_time = time(NULL) + cfg.tzoffset;
-	tm_date = g_memdup(gmtime(&unix_time), sizeof(struct tm));
-	tm_now = g_memdup(gmtime(&unix_time), sizeof(struct tm));
+	tm_date = g_memdup2(gmtime(&unix_time), sizeof(struct tm));
+	tm_now = g_memdup2(gmtime(&unix_time), sizeof(struct tm));
 
 	// Connect to PostgreSQL
 	if ( PQstatus(conn = PQconnectdb(cfg.pgconnstr)) == CONNECTION_BAD )
@@ -291,6 +294,9 @@ int main()
 
 	// Open temp file for unrelated flows
 	unrel_file = fopen(cfg.unrelflows, "ab");
+
+	// Open temp file for hosts->userid relations
+	hosts_file = fopen(cfg.hostsfile, "ab");
 
 	// Skip first line
 	fgets(line, 256, stdin);
@@ -361,6 +367,11 @@ int main()
 
 			fwrite(&outdata, sizeof(struct FFormat), 1, online->file);
 
+			// TODO: Write relations "remote host -> userid" to file
+			outhosts.unix_time = outdata.unix_time;
+			outhosts.host = outdata.host;
+			outhosts.userid = online->uid;
+			fwrite(&outhosts, sizeof(struct RFFormat), 1, hosts_file);
 		}
 		else
 		{
@@ -368,7 +379,7 @@ int main()
 			unrelated_cnt++;
 			// if unrelated line is meet, then we better update a data faster
 			// but not immediately because there can be different kinds of unrelated flows
-			lines_cnt += (cfg.lines / 100);
+			lines_cnt += (cfg.lines / 1000);
 		}
 
 		lines_cnt++;
@@ -394,7 +405,11 @@ int main()
 				g_sprintf(filename, "%s/%s.bin", cfg.unrelfdir, date_now);
 				fclose(unrel_file);
 				rename(cfg.unrelflows, filename);
+				g_sprintf(filename, "%s/%s.bin", cfg.hostsdir, date_now);
+				fclose(hosts_file);
+				rename(cfg.hostsfile, filename);
 				unrel_file = fopen(cfg.unrelflows, "ab");
+				hosts_file = fopen(cfg.hostsfile, "ab");
 				g_free(filename);
 
 			}
