@@ -305,48 +305,26 @@ int main()
 	while ( fgets(line, sizeof(line), stdin) != NULL )
 	{
 		line_ptr = line;
-		// flow_type string (not used)
-		strsep(&line_ptr, ",");
-		// time_received_ns timestamp (not used)
-		strsep(&line_ptr, ",");
-		// sequence_num uint32 (not used)
-		strsep(&line_ptr, ",");
-		// sampling_rate uint32 (not used)
-		strsep(&line_ptr, ",");
-		// sampler_address string (not used)
-		strsep(&line_ptr, ",");
-		// time_flow_start_ns timestamp (not used)
-		strsep(&line_ptr, ",");
-		// time_flow_end_ns timestamp
+		// date
 		outdata.unix_time = g_ascii_strtoll(strsep(&line_ptr, ","), NULL, 10);
-		// if ( outdata.unix_time >= 1000000000000000000ULL) // nanoseconds to seconds
-		outdata.unix_time = outdata.unix_time / 1000000000ULL;
-		// bytes uint64
+		// octets
 		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		octets = strtoul(inbuff, NULL, 10);
-		// packets uint64 (not used)
-		strsep(&line_ptr, ",");
-		// src_addr string
+		// srcip
 		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		strncpy(srcaddr_str, inbuff, INET_ADDRSTRLEN);
-		// dst_addr string
+		// dstip
 		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		strncpy(dstaddr_str, inbuff, INET_ADDRSTRLEN);
-		// src_mac string (not used)
-		strsep(&line_ptr, ",");
-		// dst_mac string (not used)
-		strsep(&line_ptr, ",");
-		// etype uint16 (not used)
-		strsep(&line_ptr, ",");
-		// proto uint8
-		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
-		outdata.proto = strtoul(inbuff, NULL, 10);
-		// src_port uint16
+		// srcport
 		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		outdata.srcport = strtoul(inbuff, NULL, 10);
-		// dst_port uint16
+		// dstport
 		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		outdata.dstport = strtoul(inbuff, NULL, 10);
+		// proto
+		if ( NULL == (inbuff = strsep(&line_ptr, "\n")) ) continue;
+		outdata.proto = strtoul(inbuff, NULL, 10);
 
 		// Unneeded traffic
 		if ( is_excluded(srcaddr_str) || is_excluded(dstaddr_str) )
