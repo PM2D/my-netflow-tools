@@ -31,3 +31,7 @@ with flow-tools (https://code.google.com/p/flow-tools/):
 temporary example with rustflow (https://github.com/meirdev/rustflow)
 
 	rustflow collect --input netflow://INTERFACE_IP:PORT --metrics-host 127.0.0.1 --format common -s csv | awk -F ',' '{print int($7 / 1000000000) "," $8 "," $10 "," $11 "," $16 "," $17 "," $15 }' | /PATH_TO/flowtosql
+
+or using "rustflow" branch
+
+	rustflow collect --input netflow://INTERFACE_IP:PORT --metrics-host 127.0.0.1 --format common -s csv | /PATH_TO/flowtosql
