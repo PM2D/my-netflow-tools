@@ -200,7 +200,7 @@ void update_hash_tables_from_db()
 		else
 		{
 
-			printf("   " CYEL "New user connected:" CCYN " %s %s" CNRM "\n", framedipaddr, online->username);
+			g_printf("   " CYEL "New user connected:" CCYN " %s %s" CNRM "\n", framedipaddr, online->username);
 			// Constructing directory name
 			g_sprintf(dirname, "%s/%s", cfg.flowsdir, online->username);
 			// If directory does not exists, create it
@@ -249,6 +249,7 @@ int main()
 
 	// stdin line buffer
 	gchar line[256];
+	gchar *line_ptr;
 	// for incoming data
 	gchar *inbuff;
 	time_t unix_time;
@@ -299,29 +300,30 @@ int main()
 	hosts_file = fopen(cfg.hostsfile, "ab");
 
 	// Skip first line
-	fgets(line, 256, stdin);
+	fgets(line, sizeof(line), stdin);
 
-	while ( fgets(line, 256, stdin) != NULL )
+	while ( fgets(line, sizeof(line), stdin) != NULL )
 	{
+		line_ptr = line;
 		// date
-		outdata.unix_time = g_ascii_strtoll(strtok(line, ","), NULL, 10);
+		outdata.unix_time = g_ascii_strtoll(strsep(&line_ptr, ","), NULL, 10);
 		// octets
-		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		octets = strtoul(inbuff, NULL, 10);
 		// srcip
-		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		strncpy(srcaddr_str, inbuff, INET_ADDRSTRLEN);
 		// dstip
-		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		strncpy(dstaddr_str, inbuff, INET_ADDRSTRLEN);
 		// srcport
-		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		outdata.srcport = strtoul(inbuff, NULL, 10);
 		// dstport
-		if ( NULL == (inbuff = strtok(NULL, ",")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, ",")) ) continue;
 		outdata.dstport = strtoul(inbuff, NULL, 10);
 		// proto
-		if ( NULL == (inbuff = strtok(NULL, "\n")) ) continue;
+		if ( NULL == (inbuff = strsep(&line_ptr, "\n")) ) continue;
 		outdata.proto = strtoul(inbuff, NULL, 10);
 
 		// Unneeded traffic
@@ -392,7 +394,7 @@ int main()
 			unix_time = time(NULL) + cfg.tzoffset;
 			memcpy(tm_date, gmtime(&unix_time), sizeof(struct tm));
 
-			printf(CYEL "%d hours, DB data sync:" CNRM "\n", tm_date->tm_hour);
+			g_printf(CYEL "%d hours, DB data sync:" CNRM "\n", tm_date->tm_hour);
 
 			// If next day
 			if ( tm_date->tm_yday != tm_now->tm_yday )
